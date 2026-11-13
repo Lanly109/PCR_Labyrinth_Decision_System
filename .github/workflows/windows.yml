@@ -1,0 +1,138 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/labyrinth-deps
+          key: windows-x64-deps-${{ hashFiles('tools/prepare_windows_ci.py') }}
+      - name: Prepare verified dependencies
+        run: python tools/prepare_windows_ci.py --destination "$env:RUNNER_TEMP/labyrinth-deps"
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+          -DLABYRINTH_WITH_GUI=ON -DLABYRINTH_WITH_ONNX=ON
+          "-DCMAKE_PREFIX_PATH=$env:SLINT_ROOT" "-DONNXRUNTIME_ROOT=$env:ONNXRUNTIME_ROOT"
+      - name: Build Release
+        run: cmake --build build --config Release --parallel 4
+      - name: Install
+        run: cmake --install build --config Release --prefix dist/windows-x64
+      - name: Package
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual Studio C++ tools not found' }
+          $crt = Get-ChildItem "$vs/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $crt) { throw 'Visual C++ runtime not found' }
+          python tools/package_windows_ci.py --install-dir dist/windows-x64 --vc-runtime-dir $crt.FullName --runtime-dir "$env:ONNXRUNTIME_ROOT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: labyrinth-windows-x64
+          path: |
+            dist/labyrinth-windows-x64.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  release:
+    needs: windows
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: labyrinth-windows-x64
+          path: dist
+      - name: Publish latest Windows build
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { readFile } = require('node:fs/promises');
+            const repo = context.repo;
+            const tag = 'latest';
+            const names = ['labyrinth-windows-x64.zip', 'SHA256SUMS.txt'];
+            const files = await Promise.all(names.map(async name => ({
+              name, data: await readFile(`dist/${name}`),
+            })));
+
+            let reference;
+            try {
+              reference = await github.rest.git.getRef({ ...repo, ref: `tags/${tag}` });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            if (reference) {
+              await github.rest.git.updateRef({
+                ...repo, ref: `tags/${tag}`, sha: context.sha, force: true,
+              });
+            } else {
+              await github.rest.git.createRef({
+                ...repo, ref: `refs/tags/${tag}`, sha: context.sha,
+              });
+            }
+
+            let release;
+            try {
+              ({ data: release } = await github.rest.repos.getReleaseByTag({ ...repo, tag }));
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            if (!release) {
+              ({ data: release } = await github.rest.repos.createRelease({
+                ...repo, tag_name: tag, name: '最新 Windows 构建', draft: true,
+              }));
+            }
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              ...repo, release_id: release.id,
+            });
+            for (const file of files) {
+              for (const asset of assets.filter(asset => asset.name === file.name)) {
+                await github.rest.repos.deleteReleaseAsset({ ...repo, asset_id: asset.id });
+              }
+              await github.rest.repos.uploadReleaseAsset({
+                ...repo, release_id: release.id, name: file.name, data: file.data,
+                headers: {
+                  'content-type': file.name.endsWith('.zip') ? 'application/zip' : 'text/plain',
+                  'content-length': file.data.length,
+                },
+              });
+            }
+            const base = `${context.serverUrl}/${repo.owner}/${repo.repo}`;
+            await github.rest.repos.updateRelease({
+              ...repo, release_id: release.id, name: '最新 Windows 构建',
+              body: `main 分支最新成功构建。\n\n源码提交：[${context.sha}](${base}/commit/${context.sha})\n\n[构建记录](${base}/actions/runs/${context.runId})`,
+              draft: false, prerelease: false, make_latest: 'true',
+            });
+            core.info(`Published ${base}/releases/tag/${tag}`);

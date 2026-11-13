@@ -1,0 +1,596 @@
+import { ListView, Palette, ScrollView } from "std-widgets.slint";
+import { Action, FieldInput, Label, Rule, StatusTag, Theme, ToggleControl } from "controls.slint";
+import { SettingsView, SettingRow, SettingsMatrix, TicketPickerData, RankedButton } from "settings-view.slint";
+import { LogRow, LogsView } from "logs-view.slint";
+export { SettingRow, MatrixCell, MatrixRow, SettingsMatrix } from "settings-view.slint";
+export { TicketPickerData, RankedButton } from "settings-view.slint";
+export { LogRow } from "logs-view.slint";
+
+export struct BrowseItem {
+    name: string,
+    directory: bool,
+}
+
+component NavItem inherits Action {
+    in property <bool> branch;
+    in property <bool> expanded;
+    callback focused(length, length);
+
+    changed has-focus => {
+        if root.has-focus { root.focused(root.absolute-position.y, root.height); }
+    }
+    accessible-expandable: root.branch;
+    accessible-expanded: root.expanded;
+
+    quiet: true;
+    left: true;
+    height: 30px;
+    inset: 12px;
+    min-width: 0px;
+    if root.selected: Rectangle {
+        x: 2px;
+        y: 8px;
+        width: 2px;
+        height: parent.height - 16px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
+    if root.branch: Path {
+        x: parent.width - 20px;
+        y: (parent.height - 10px) / 2;
+        width: 10px;
+        height: 10px;
+        viewbox-width: 10;
+        viewbox-height: 10;
+        stroke: root.expanded || root.selected ? Theme.accent-text : Theme.muted;
+        stroke-width: 1.4px;
+        commands: root.expanded ? "M 1 3 L 5 7 L 9 3" : "M 3 1 L 7 5 L 3 9";
+    }
+}
+
+component FileBrowser inherits Rectangle {
+    in property <string> location;
+    in property <[BrowseItem]> entries;
+    in property <string> error;
+    in property <bool> folders;
+    callback navigate(string);
+    callback choose(string);
+    callback cancel();
+
+    property <string> selected;
+    changed location => {
+        directory.text = root.location;
+        root.selected = "";
+        files.viewport-y = 0px;
+    }
+
+    border-width: 1px;
+    border-color: Theme.line;
+    border-radius: Theme.radius;
+    background: Theme.surface;
+    forward-focus: keys;
+
+    keys := FocusScope {
+        forward-focus: directory;
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.cancel();
+                return accept;
+            }
+            return reject;
+        }
+
+        VerticalLayout {
+            padding: 14px;
+            spacing: Theme.space;
+
+            Label {
+                height: 25px;
+                text: root.folders ? "选择模型目录" : "选择游戏数据文件";
+                font-size: 17px;
+                font-weight: 600;
+            }
+            HorizontalLayout {
+                height: Theme.control;
+                spacing: Theme.space;
+                Action {
+                    text: "上一级";
+                    height: Theme.control;
+                    clicked => { root.navigate(".."); }
+                }
+                directory := FieldInput {
+                    label: "当前目录";
+                    text: root.location;
+                    height: Theme.control;
+                    accepted(path) => { root.navigate(path); }
+                }
+                Action {
+                    text: "前往";
+                    height: Theme.control;
+                    clicked => { root.navigate(directory.text); }
+                }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                background: Theme.sidebar;
+                border-radius: Theme.radius;
+                border-width: 1px;
+                border-color: Theme.line;
+                clip: true;
+
+                files := ListView {
+                    x: 5px;
+                    y: 4px;
+                    width: parent.width - 10px;
+                    height: parent.height - 8px;
+                    for entry in root.entries: Action {
+                        height: 30px;
+                        min-width: 0px;
+                        inset: 7px;
+                        text: entry.directory ? entry.name + " /" : entry.name;
+                        description: entry.directory ? "打开目录" : "选中文件";
+                        quiet: true;
+                        left: true;
+                        selected: !entry.directory && root.selected == entry.name;
+                        clicked => {
+                            if entry.directory { root.navigate(entry.name); }
+                            else { root.selected = entry.name; }
+                        }
+                    }
+                }
+                if root.entries.length == 0: Label {
+                    width: parent.width;
+                    height: parent.height;
+                    text: "此目录没有可选项目";
+                    horizontal-alignment: center;
+                    color: Theme.muted;
+                }
+            }
+            HorizontalLayout {
+                height: Theme.control;
+                spacing: Theme.space;
+                Label {
+                    min-width: 0px;
+                    horizontal-stretch: 1;
+                    text: root.error != "" ? root.error : root.selected;
+                    color: root.error == "" ? Theme.muted : Theme.error;
+                    font-size: Theme.small;
+                }
+                Action {
+                    text: "取消";
+                    quiet: true;
+                    height: Theme.control;
+                    clicked => { root.cancel(); }
+                }
+                Action {
+                    text: root.folders ? "选择此目录" : "选择文件";
+                    primary: true;
+                    enabled: root.folders ? root.location != "" : root.selected != "";
+                    height: Theme.control;
+                    clicked => { root.choose(root.folders ? root.location : root.selected); }
+                }
+            }
+        }
+    }
+}
+
+export component ConsoleWindow inherits Window {
+    title: "黎明界决策系统";
+    icon: @image-url("assets/labyrinth-icon-small.png");
+    preferred-width: 920px;
+    preferred-height: 560px;
+    min-width: 760px;
+    min-height: 480px;
+    background: Theme.base;
+    in property <string> ui-font-family;
+    default-font-family: ui-font-family;
+    default-font-size: 13px;
+    init => { Palette.color-scheme = ColorScheme.dark; }
+    in-out property <int> page: 0;
+    in property <bool> online;
+    in property <bool> busy;
+    in property <bool> initial-startup;
+    in-out property <bool> decisions-enabled: true;
+    in property <string> endpoint;
+    in property <string> device;
+    in property <string> notice;
+    in property <bool> notice-error;
+    in property <int> section: 0;
+    in property <[string]> section-names;
+    in property <[bool]> section-groups;
+    in property <string> section-title;
+    in property <string> section-description;
+    in property <[SettingRow]> settings;
+    in property <[SettingsMatrix]> matrices;
+    in property <[string]> opening-map-columns;
+    in property <[string]> subpages;
+    in property <int> subpage-index;
+    in-out property <string> ticket-query;
+    in property <TicketPickerData> ticket-picker;
+    in property <[RankedButton]> priority-options;
+    in-out property <string> raw-draft;
+    in property <bool> dirty;
+    in property <string> config-message;
+    in property <bool> config-error;
+    in property <[LogRow]> log-rows;
+    in-out property <int> log-selected-row: -1;
+    in property <[string]> account-options;
+    in property <[string]> kind-options;
+    in-out property <int> account-index: 0;
+    in-out property <int> kind-index: 0;
+    in-out property <int> outcome-index: 0;
+    in-out property <string> query;
+    in-out property <bool> frozen;
+    in-out property <bool> raw-detail;
+    in property <string> log-count;
+    in property <string> detail-title;
+    in property <string> detail-meta;
+    in property <string> request-summary;
+    in property <string> response-summary;
+    in property <string> request-json;
+    in property <string> response-json;
+    callback master-changed(bool);
+    callback section-changed(int);
+    callback subpage-changed(int);
+    callback setting-edited(string, string);
+    callback order-edited(string, int);
+    callback ticket-filtered(string);
+    callback ticket-changed(int);
+    callback apply-raw(string);
+    callback save-config();
+    callback revert-config();
+    callback log-filtered();
+    callback select-log(int);
+    callback sort-log(int, bool);
+
+    in-out property <bool> browse-open;
+    in property <string> browse-location;
+    in property <[BrowseItem]> browse-items;
+    in property <bool> browse-directory;
+    in property <string> browse-error;
+    callback browse-path(string, string);
+    callback browse-navigate(string);
+    callback browse-choose(string);
+
+    property <int> log-sort-column: 0;
+    property <bool> log-sort-ascending: false;
+    property <length> sidebar-width: 164px;
+    property <bool> branch-open: true;
+    property <string> state-text: initial-startup ? "正在启动" :
+        busy ? "正在切换" : online ? "服务在线" : "服务离线";
+    property <color> state-tone: busy ? Theme.warning : online ? Theme.success : Theme.muted;
+
+    changed browse-open => {
+        if root.browse-open { browser.show(); }
+        else { browser.close(); }
+    }
+
+    function open-section(index: int) {
+        if root.page == 1 && root.section == index && root.subpages.length > 0 {
+            root.branch-open = !root.branch-open;
+            return;
+        }
+        root.section-changed(index);
+        if root.section == index { root.branch-open = true; }
+        root.page = 1;
+    }
+
+    top := Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: 50px;
+        background: Theme.sidebar;
+
+        HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 15px;
+            spacing: 11px;
+
+            Rectangle {
+                width: 28px;
+                Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    width: parent.width;
+                    height: self.width;
+                    border-radius: Theme.radius;
+                    clip: true;
+                    Image {
+                        width: parent.width;
+                        height: parent.height;
+                        source: root.icon;
+                        image-fit: contain;
+                    }
+                }
+            }
+            Label {
+                text: root.title;
+                font-size: 17px;
+                font-weight: 700;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            if root.width >= 820px: Label {
+                text: "HTTP / TCP";
+                font-size: Theme.small;
+                color: Theme.muted;
+            }
+            Rectangle {
+                width: 76px;
+                StatusTag {
+                    y: (parent.height - self.height) / 2;
+                    text: root.state-text;
+                    tone: root.state-tone;
+                }
+            }
+            Label {
+                text: root.endpoint == "" ? "—" : root.endpoint;
+                min-width: 0px;
+                max-width: 145px;
+                font-size: 12px;
+                color: Theme.muted;
+            }
+            Rectangle {
+                width: 1px;
+                Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    width: 1px;
+                    height: 19px;
+                    background: Theme.line;
+                }
+            }
+            Label {
+                text: root.device == "" ? "ONNX —" : root.device;
+                min-width: 0px;
+                max-width: clamp(root.width - 560px, 155px, 300px);
+                wrap: word-wrap;
+                font-size: 12px;
+                color: Theme.muted;
+            }
+            Rectangle {
+                width: master.min-width;
+                master := ToggleControl {
+                    text: "总开关";
+                    height: Theme.compact;
+                    y: (parent.height - self.height) / 2;
+                    checked <=> root.decisions-enabled;
+                    toggled => { root.master-changed(self.checked); }
+                }
+            }
+        }
+        Rule { y: parent.height - 1px; }
+    }
+
+    banner := Rectangle {
+        y: top.height;
+        height: !root.decisions-enabled || root.notice != "" ? 30px : 0px;
+        visible: self.height > 0px;
+        background: root.notice-error ? #30222c : #29251f;
+        Label {
+            x: 16px;
+            width: parent.width - 32px;
+            height: parent.height;
+            color: root.notice-error ? Theme.error : Theme.warning;
+            font-size: 12px;
+            text: root.notice == "" ? "决策已暂停 · 有效请求返回 noop，日志照常记录" : root.notice;
+        }
+    }
+
+    shell := Rectangle {
+        x: 0px;
+        y: top.height + banner.height;
+        width: root.width;
+        height: root.height - self.y;
+
+        nav := Rectangle {
+            x: 0px;
+            y: 0px;
+            width: root.sidebar-width;
+            height: parent.height;
+            background: Theme.sidebar;
+
+            Rectangle {
+                x: parent.width - 1px;
+                width: 1px;
+                background: Theme.line;
+            }
+            function reveal(top: length, height: length) {
+                let offset = top - nav-scroll.absolute-position.y;
+                let overflow = offset + height - nav-scroll.visible-height;
+                let current = nav-scroll.viewport-y;
+                let next = offset < 0px ? current - offset : overflow > 0px ? current - overflow : current;
+                nav-scroll.viewport-y = clamp(next,
+                    min(0px, nav-scroll.visible-height - nav-scroll.viewport-height), 0px);
+            }
+
+            workspace := VerticalLayout {
+                x: 0px;
+                y: 0px;
+                width: parent.width - 1px;
+                height: self.preferred-height;
+                padding-left: 10px;
+                padding-right: 10px;
+                padding-top: 11px;
+                spacing: 1px;
+
+                Label {
+                    x: 11px;
+                    height: 22px;
+                    text: "工作区";
+                    color: Theme.muted;
+                    font-size: Theme.small;
+                }
+                NavItem {
+                    text: "决策日志";
+                    selected: root.page == 0;
+                    clicked => { root.page = 0; }
+                }
+                Rectangle { height: 8px; }
+                Label {
+                    x: 11px;
+                    height: 22px;
+                    text: "全局配置";
+                    color: Theme.muted;
+                    font-size: Theme.small;
+                }
+            }
+
+            nav-scroll := ScrollView {
+                x: 0px;
+                y: workspace.height;
+                width: parent.width - 1px;
+                height: parent.height - self.y - 44px;
+                horizontal-scrollbar-policy: always-off;
+                mouse-drag-pan-enabled: false;
+                viewport-width: self.visible-width;
+                viewport-height: max(self.visible-height, menu.height);
+
+                menu := VerticalLayout {
+                    x: 0px;
+                    y: 0px;
+                    width: nav-scroll.visible-width;
+                    height: self.preferred-height;
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    padding-top: 2px;
+                    padding-bottom: 6px;
+                    spacing: 1px;
+
+                    for name[i] in root.section-names: VerticalLayout {
+                        spacing: 1px;
+                        property <bool> active: root.page == 1 && root.section == i;
+                        property <bool> expanded: active && root.branch-open && root.subpages.length > 0;
+
+                        NavItem {
+                            text: name;
+                            branch: root.section-groups[i];
+                            expanded: parent.expanded;
+                            selected: parent.active && !parent.expanded;
+                            clicked => { root.open-section(i); }
+                            focused(y, height) => { nav.reveal(y, height); }
+                        }
+                        if self.expanded: Rectangle {
+                            height: children.preferred-height;
+                            Rectangle {
+                                x: 12px;
+                                y: 2px;
+                                width: 1px;
+                                height: parent.height - 4px;
+                                background: Theme.line;
+                            }
+                            children := VerticalLayout {
+                                x: 17px;
+                                y: 0px;
+                                width: parent.width - 17px;
+                                height: self.preferred-height;
+                                spacing: 1px;
+
+                                for child[j] in root.subpages: NavItem {
+                                    height: 28px;
+                                    inset: 8px;
+                                    text: child;
+                                    selected: root.subpage-index == j;
+                                    clicked => { root.subpage-changed(j); }
+                                    focused(y, height) => { nav.reveal(y, height); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Label {
+                x: 22px;
+                y: parent.height - 37px;
+                width: parent.width - 33px;
+                height: 30px;
+                text: "v1.0";
+                color: Theme.muted;
+                font-size: Theme.small;
+            }
+        }
+
+        if root.page == 0: LogsView {
+            x: nav.width;
+            y: 0px;
+            width: parent.width - nav.width;
+            height: parent.height;
+            log-rows: root.log-rows;
+            log-selected-row <=> root.log-selected-row;
+            account-options: root.account-options;
+            kind-options: root.kind-options;
+            account-index <=> root.account-index;
+            kind-index <=> root.kind-index;
+            outcome-index <=> root.outcome-index;
+            query <=> root.query;
+            frozen <=> root.frozen;
+            raw-detail <=> root.raw-detail;
+            log-count: root.log-count;
+            sort-column <=> root.log-sort-column;
+            sort-ascending <=> root.log-sort-ascending;
+            detail-title: root.detail-title;
+            detail-meta: root.detail-meta;
+            request-summary: root.request-summary;
+            response-summary: root.response-summary;
+            request-json: root.request-json;
+            response-json: root.response-json;
+            log-filtered => { root.log-filtered(); }
+            select-log(row) => { root.select-log(row); }
+            sort-log(column, ascending) => { root.sort-log(column, ascending); }
+        }
+
+        if root.page == 1: SettingsView {
+            x: nav.width;
+            y: 0px;
+            width: parent.width - nav.width;
+            height: parent.height;
+            section: root.section;
+            section-title: root.section-title;
+            section-description: root.section-description;
+            settings: root.settings;
+            matrices: root.matrices;
+            opening-map-columns: root.opening-map-columns;
+            subpage-title: root.subpage-index >= 0 && root.subpage-index < root.subpages.length ?
+                root.subpages[root.subpage-index] : "";
+            subpage-index: root.subpage-index;
+            ticket-query <=> root.ticket-query;
+            ticket-picker: root.ticket-picker;
+            priority-options: root.priority-options;
+            raw-draft <=> root.raw-draft;
+            dirty: root.dirty;
+            config-message: root.config-message;
+            config-error: root.config-error;
+            busy: root.busy;
+            status-text: root.state-text;
+            status-color: root.state-tone;
+            setting-edited(key, value) => { root.setting-edited(key, value); }
+            order-edited(key, delta) => { root.order-edited(key, delta); }
+            ticket-filtered(query) => { root.ticket-filtered(query); }
+            ticket-changed(index) => { root.ticket-changed(index); }
+            browse-path(key, value) => {
+                root.browse-path(key, value);
+                root.browse-open = true;
+            }
+            apply-raw(raw) => { root.apply-raw(raw); }
+            save-config => { root.save-config(); }
+            revert-config => { root.revert-config(); }
+        }
+    }
+
+    browser := PopupWindow {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        width: 510px;
+        height: 376px;
+        close-policy: no-auto-close;
+        forward-focus: browser-content;
+
+        browser-content := FileBrowser {
+            location: root.browse-location;
+            entries: root.browse-items;
+            error: root.browse-error;
+            folders: root.browse-directory;
+            navigate(path) => { root.browse-navigate(path); }
+            choose(path) => { root.browse-choose(path); }
+            cancel => { root.browse-open = false; }
+        }
+    }
+}

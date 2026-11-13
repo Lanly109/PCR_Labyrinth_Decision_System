@@ -1,0 +1,459 @@
+import { ListView } from "std-widgets.slint";
+
+export global Theme {
+    out property <length> portrait-width: 62px;
+    out property <length> portrait-height: 68px;
+    out property <color> base: #0f1117;
+    out property <color> sidebar: #171b24;
+    out property <color> surface: #1c212b;
+    out property <color> control-bg: #252b36;
+    out property <color> hover: #2a3240;
+    out property <color> selected: #222e44;
+    out property <color> line: #303744;
+    out property <color> fg: #e8ecf3;
+    out property <color> muted: #929bac;
+    out property <color> disabled: #737d90;
+    out property <color> accent: #4f8cff;
+    out property <color> accent-text: #a4c3ff;
+    out property <color> on-accent: #0f182a;
+    out property <color> success: #36c997;
+    out property <color> warning: #efbf70;
+    out property <color> error: #fa929b;
+    out property <length> radius: 7px;
+    out property <length> control: 34px;
+    out property <length> compact: 28px;
+    out property <length> space: 8px;
+    out property <length> gutter: 22px;
+    out property <length> form-max: 672px;
+    out property <length> row: 44px;
+    out property <length> font: 13px;
+    out property <length> small: 11px;
+}
+
+export component Label inherits Text {
+    color: Theme.fg;
+    font-size: Theme.font;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+export component Rule inherits Rectangle {
+    height: 1px;
+    background: Theme.line;
+}
+
+export component ClickTarget inherits FocusScope {
+    in property <bool> interactive: true;
+    out property <bool> hovered: pointer.has-hover;
+    out property <bool> pressed: pointer.pressed;
+    callback activate();
+
+    enabled: interactive;
+    key-pressed(event) => {
+        if root.interactive && (event.text == Key.Return || event.text == " ") {
+            root.activate();
+            return accept;
+        }
+        return reject;
+    }
+    pointer := TouchArea {
+        enabled: root.interactive;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            root.focus();
+            root.activate();
+        }
+    }
+}
+
+export component Action inherits Rectangle {
+    in property <string> text;
+    in property <string> description;
+    in property <bool> enabled: true;
+    in property <bool> primary;
+    in property <bool> selected;
+    in property <bool> quiet;
+    in property <bool> left;
+    in property <bool> right;
+    in property <length> inset: 10px;
+    out property <bool> has-focus: target.has-focus;
+    callback clicked();
+
+    min-width: caption.preferred-width + 2 * inset;
+    preferred-width: self.min-width;
+    min-height: Theme.compact;
+    preferred-height: Theme.control;
+    max-height: Theme.control;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: Theme.radius;
+    border-width: target.has-focus || !quiet ? 1px : 0px;
+    border-color: target.has-focus ? (primary ? Theme.fg : Theme.accent) : primary ? transparent : Theme.line;
+    background: !enabled ? (quiet ? transparent : Theme.surface) :
+        target.pressed ? (primary ? #81abff : Theme.control-bg) :
+        primary ? (target.hovered ? #77a6ff : Theme.accent) :
+        selected ? Theme.selected : target.hovered ? Theme.hover : quiet ? transparent : Theme.surface;
+    forward-focus: target;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-description: root.description;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+
+    caption := Label {
+        x: root.inset;
+        width: max(0px, parent.width - 2 * root.inset);
+        height: parent.height;
+        text: root.text;
+        color: !root.enabled ? Theme.disabled : root.primary ? Theme.on-accent :
+            root.selected ? Theme.accent-text : Theme.fg;
+        font-weight: root.primary || root.selected ? 600 : 400;
+        horizontal-alignment: root.left ? TextHorizontalAlignment.left :
+            root.right ? TextHorizontalAlignment.right : TextHorizontalAlignment.center;
+    }
+    target := ClickTarget {
+        interactive: root.enabled;
+        activate => { root.clicked(); }
+    }
+}
+
+export component ToggleControl inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <bool> checkbox;
+    in-out property <bool> checked;
+    callback toggled();
+
+    min-width: (checkbox ? 15px : 30px) + (text == "" ? 8px : caption.preferred-width + 16px);
+    preferred-height: Theme.control;
+    max-height: Theme.control;
+    min-height: Theme.compact;
+    vertical-stretch: 0;
+    border-radius: Theme.radius;
+    border-width: target.has-focus ? 1px : 0px;
+    border-color: Theme.accent;
+    background: enabled && target.hovered ? Theme.hover : transparent;
+    forward-focus: target;
+    accessible-role: AccessibleRole.checkbox;
+    accessible-label: root.text;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.toggle(); }
+
+    function toggle() {
+        if root.enabled {
+            root.checked = !root.checked;
+            root.toggled();
+        }
+    }
+
+    track := Rectangle {
+        width: root.checkbox ? 15px : 30px;
+        height: root.checkbox ? 15px : 17px;
+        x: root.text == "" ? (parent.width - self.width) / 2 : 4px;
+        y: (parent.height - self.height) / 2;
+        border-radius: root.checkbox ? 4px : 9px;
+        border-width: 1px;
+        border-color: root.checked && root.enabled ? Theme.accent : #536075;
+        background: root.checked && root.enabled ? Theme.accent : Theme.control-bg;
+        if !root.checkbox: Rectangle {
+            x: root.checked ? parent.width - self.width - 3px : 3px;
+            y: (parent.height - self.height) / 2;
+            width: 11px;
+            height: 11px;
+            border-radius: 6px;
+            background: root.checked && root.enabled ? Theme.on-accent : Theme.muted;
+        }
+        if root.checkbox && root.checked: Path {
+            x: 3px;
+            y: 4px;
+            width: 9px;
+            height: 7px;
+            viewbox-width: 9;
+            viewbox-height: 7;
+            stroke: Theme.on-accent;
+            stroke-width: 1.6px;
+            commands: "M 0.5 3.5 L 3.3 6 L 8.5 0.7";
+        }
+    }
+    caption := Label {
+        x: track.x + track.width + 7px;
+        width: max(0px, parent.width - self.x - 5px);
+        height: parent.height;
+        text: root.text;
+        color: root.enabled ? Theme.fg : Theme.disabled;
+    }
+    target := ClickTarget {
+        interactive: root.enabled;
+        activate => { root.toggle(); }
+    }
+}
+
+export component FieldInput inherits Rectangle {
+    in-out property <string> text <=> input.text;
+    in property <string> placeholder;
+    in property <string> label;
+    in property <bool> enabled <=> input.enabled;
+    in property <bool> numeric;
+    callback edited(string);
+    callback accepted(string);
+
+    min-width: 36px;
+    min-height: Theme.compact;
+    preferred-height: Theme.control;
+    max-height: Theme.control;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.accent : hover.has-hover && root.enabled ? #4a5569 : Theme.line;
+    border-radius: Theme.radius;
+    background: root.enabled ? Theme.control-bg : Theme.surface;
+    clip: true;
+    forward-focus: input;
+    accessible-role: text-input;
+    accessible-label: root.label;
+    accessible-value <=> input.text;
+    accessible-placeholder-text: root.placeholder;
+    accessible-enabled: root.enabled;
+    accessible-action-set-value(value) => {
+        if root.enabled {
+            input.text = value;
+            root.edited(value);
+        }
+    }
+
+    hover := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.text;
+    }
+    Label {
+        x: 9px;
+        width: max(0px, parent.width - 18px);
+        height: parent.height;
+        visible: input.text == "" && input.preedit-text == "";
+        text: root.placeholder;
+        color: Theme.muted;
+        accessible-role: none;
+    }
+    ContextMenuArea {
+        x: 2px;
+        width: parent.width - 4px;
+        enabled: root.enabled;
+        Menu {
+            MenuItem { title: "剪切"; activated => { input.cut(); } }
+            MenuItem { title: "复制"; activated => { input.copy(); } }
+            MenuItem { title: "粘贴"; activated => { input.paste(); } }
+            MenuItem { title: "全选"; activated => { input.select-all(); } }
+        }
+        Rectangle {
+            x: 7px;
+            width: parent.width - 14px;
+            clip: true;
+
+            input := TextInput {
+                property <length> scroll-x;
+
+                x: clamp(scroll-x, min(0px, parent.width - self.width - self.text-cursor-width), 0px);
+                width: max(parent.width - self.text-cursor-width, self.preferred-width);
+                height: parent.height;
+                vertical-alignment: center;
+                single-line: true;
+                input-type: root.numeric ? InputType.number : InputType.text;
+                color: root.enabled ? Theme.fg : Theme.disabled;
+                font-size: Theme.font;
+                selection-background-color: Theme.accent;
+                selection-foreground-color: Theme.on-accent;
+                accessible-role: none;
+                cursor-position-changed(position) => {
+                    if position.x + self.scroll-x < 0px {
+                        self.scroll-x = -position.x;
+                    } else if position.x + self.scroll-x > parent.width - self.text-cursor-width {
+                        self.scroll-x = parent.width - position.x - self.text-cursor-width;
+                    }
+                }
+                edited => { root.edited(self.text); }
+                accepted => { root.accepted(self.text); }
+            }
+        }
+    }
+}
+
+export component SelectControl inherits Rectangle {
+    in property <[string]> options;
+    in-out property <int> current-index: -1;
+    in property <string> label;
+    in property <bool> enabled: true;
+    in property <length> popup-min-width;
+    callback selected(int);
+
+    property <int> highlight: -1;
+    property <bool> popup-active;
+    property <length> option-height: 29px;
+    property <bool> available: enabled && options.length > 0;
+
+    min-width: 56px;
+    min-height: Theme.compact;
+    preferred-height: Theme.control;
+    max-height: Theme.control;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    border-width: 1px;
+    border-color: target.has-focus || popup-active ? Theme.accent : Theme.line;
+    border-radius: Theme.radius;
+    background: !available ? Theme.surface : target.hovered ? Theme.hover : Theme.control-bg;
+    forward-focus: target;
+    accessible-role: combobox;
+    accessible-label: root.label;
+    accessible-enabled: root.available;
+    accessible-expandable: true;
+    accessible-expanded: popup-active;
+    accessible-value: caption.text;
+    accessible-action-expand => { root.open(); }
+
+    function open() {
+        if root.available {
+            root.highlight = max(0, root.current-index);
+            menu.show();
+        }
+    }
+
+    function choose(index: int) {
+        if index >= 0 && index < root.options.length {
+            menu.close();
+            root.current-index = index;
+            root.selected(index);
+        }
+    }
+
+    caption := Label {
+        x: 9px;
+        width: max(0px, parent.width - 31px);
+        height: parent.height;
+        text: root.current-index >= 0 && root.current-index < root.options.length ?
+            root.options[root.current-index] : "请选择";
+        color: root.available ? Theme.fg : Theme.disabled;
+    }
+    Path {
+        x: parent.width - 20px;
+        y: (parent.height - 6px) / 2;
+        width: 10px;
+        height: 6px;
+        viewbox-width: 10;
+        viewbox-height: 6;
+        stroke: Theme.muted;
+        stroke-width: 1.4px;
+        commands: "M 1 1 L 5 5 L 9 1";
+    }
+    target := ClickTarget {
+        interactive: root.available;
+        activate => { root.open(); }
+        key-pressed(event) => {
+            if root.available && (event.text == Key.UpArrow || event.text == Key.DownArrow) {
+                root.open();
+                return accept;
+            }
+            if root.available && (event.text == Key.Return || event.text == " ") {
+                root.open();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    menu := PopupWindow {
+        x: 0px;
+        y: root.height + 3px;
+        width: max(root.width, root.popup-min-width);
+        height: min(7, root.options.length) * root.option-height + 10px;
+        close-policy: close-on-click-outside;
+        forward-focus: popup-focus;
+
+        popup-focus := FocusScope {
+            function reveal() {
+                choices.viewport-y = min(-root.highlight * root.option-height,
+                    max(choices.viewport-y, choices.visible-height - (root.highlight + 1) * root.option-height));
+            }
+
+            focus-changed-event => {
+                root.popup-active = self.has-focus;
+                if self.has-focus { self.reveal(); }
+            }
+            key-pressed(event) => {
+                if event.text == Key.Escape {
+                    menu.close();
+                    return accept;
+                }
+                if event.text == Key.Return || event.text == " " {
+                    root.choose(root.highlight);
+                    return accept;
+                }
+                if event.text == Key.UpArrow || event.text == Key.DownArrow ||
+                    event.text == Key.Home || event.text == Key.End {
+                    root.highlight = event.text == Key.Home ? 0 :
+                        event.text == Key.End ? root.options.length - 1 :
+                        clamp(root.highlight + (event.text == Key.UpArrow ? -1 : 1), 0, root.options.length - 1);
+                    self.reveal();
+                    return accept;
+                }
+                return reject;
+            }
+            Rectangle {
+                background: Theme.surface;
+                border-color: Theme.line;
+                border-width: 1px;
+                border-radius: Theme.radius;
+                choices := ListView {
+                    x: 5px;
+                    y: 5px;
+                    width: parent.width - 10px;
+                    height: parent.height - 10px;
+                    for value[index] in root.options: Rectangle {
+                        height: root.option-height;
+                        border-radius: 5px;
+                        background: index == root.highlight || option.has-hover ? Theme.selected : transparent;
+                        accessible-role: button;
+                        accessible-label: value;
+                        accessible-action-default => { root.choose(index); }
+                        Label {
+                            x: 7px;
+                            width: parent.width - 14px;
+                            height: parent.height;
+                            text: value;
+                            color: index == root.current-index ? Theme.accent-text : Theme.fg;
+                        }
+                        option := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { root.choose(index); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component StatusTag inherits Rectangle {
+    in property <string> text;
+    in property <color> tone: Theme.muted;
+    width: caption.preferred-width + 28px;
+    height: 24px;
+    border-radius: Theme.radius;
+    background: Theme.surface;
+
+    Rectangle {
+        x: 8px;
+        y: (parent.height - self.height) / 2;
+        width: 6px;
+        height: 6px;
+        border-radius: 3px;
+        background: root.tone;
+    }
+    caption := Label {
+        x: 20px;
+        width: parent.width - 24px;
+        height: parent.height;
+        text: root.text;
+        font-size: Theme.small;
+        color: root.tone;
+    }
+}

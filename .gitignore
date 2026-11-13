@@ -1,0 +1,10 @@
+.venv/
+.build-env/
+build/
+dist/
+*.spec
+__pycache__/
+*.log
+native/build/
+
+.DS_Store

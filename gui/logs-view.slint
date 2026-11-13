@@ -1,0 +1,372 @@
+import { ListView, TextEdit } from "std-widgets.slint";
+import { Action, FieldInput, Label, Rule, SelectControl, Theme, ToggleControl } from "controls.slint";
+
+export struct LogRow {
+    cells: [StandardListViewItem],
+    alert: bool,
+}
+
+component LogColumns inherits Rectangle {
+    in property <[StandardListViewItem]> cells;
+    in property <bool> heading;
+    in property <int> sort-column;
+    in property <bool> ascending;
+    callback sort(int);
+
+    property <[string]> titles: ["时间", "账号", "类型", "请求摘要", "结果", "耗时"];
+    property <length> time-width: 83px;
+    property <length> account-width: 112px;
+    property <length> kind-width: root.width < 620px ? 60px : 78px;
+    property <length> duration-width: 77px;
+    property <length> flexible-width: max(0px, root.width - time-width - account-width - kind-width - duration-width);
+    property <length> result-width: min(flexible-width, max(120px, flexible-width * 0.47));
+    property <length> summary-width: flexible-width - result-width;
+    property <[length]> widths: [time-width, account-width, kind-width, summary-width, result-width, duration-width];
+    property <[length]> starts: [0px, time-width, time-width + account-width,
+        time-width + account-width + kind-width, time-width + account-width + kind-width + summary-width,
+        root.width - duration-width];
+
+    for name[i] in titles: Rectangle {
+        x: root.starts[i];
+        width: root.widths[i];
+        clip: true;
+        if root.heading: Action {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            min-width: 0px;
+            height: parent.height;
+            text: name + (root.sort-column == i ? (root.ascending ? " ↑" : " ↓") : "");
+            description: "按" + name + "排序";
+            quiet: true;
+            left: i != 5;
+            right: i == 5;
+            inset: 8px;
+            clicked => { root.sort(i); }
+        }
+        if !root.heading: Label {
+            x: 8px;
+            width: max(0px, parent.width - 16px);
+            height: parent.height;
+            text: root.cells[i].text;
+            font-size: 12px;
+            wrap: i == 3 || i == 4 ? word-wrap : no-wrap;
+            color: i == 0 || i == 5 ? Theme.muted : i == 2 ? Theme.accent-text : Theme.fg;
+            horizontal-alignment: i == 5 ? right : left;
+        }
+    }
+}
+
+component LogDetailColumn inherits VerticalLayout {
+    in property <string> heading;
+    in property <string> content;
+    min-width: 0px;
+    preferred-width: 0px;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+    spacing: 4px;
+    Label {
+        height: 17px;
+        text: root.heading;
+        color: Theme.accent-text;
+        font-size: Theme.small;
+        font-weight: 600;
+    }
+    TextEdit {
+        min-width: 0px;
+        min-height: 42px;
+        vertical-stretch: 1;
+        accessible-label: root.heading;
+        text: root.content;
+        read-only: true;
+        wrap: word-wrap;
+        font-size: 12px;
+    }
+}
+
+export component LogsView inherits Rectangle {
+    in property <[LogRow]> log-rows;
+    in-out property <int> log-selected-row: -1;
+    in property <[string]> account-options;
+    in property <[string]> kind-options;
+    in-out property <int> account-index;
+    in-out property <int> kind-index;
+    in-out property <int> outcome-index;
+    in-out property <string> query;
+    in-out property <bool> frozen;
+    in-out property <bool> raw-detail;
+    in property <string> log-count;
+    in property <string> detail-title;
+    in property <string> detail-meta;
+    in property <string> request-summary;
+    in property <string> response-summary;
+    in property <string> request-json;
+    in property <string> response-json;
+    callback log-filtered();
+    callback select-log(int);
+    callback sort-log(int, bool);
+
+    property <length> inset: Theme.gutter;
+    property <length> log-row-height: 31px;
+    property <bool> wide: root.width >= 1280px;
+    property <bool> compact-height: root.height <= 440px;
+    property <bool> detail-open: true;
+    property <bool> has-detail: root.log-selected-row >= 0;
+    property <bool> show-detail: root.wide || (root.detail-open && root.has-detail);
+    property <length> detail-width: 510px;
+    property <length> detail-height: clamp(root.height * 0.46, 184px, 285px);
+    in-out property <int> sort-column: 0;
+    in-out property <bool> sort-ascending: false;
+
+    background: Theme.base;
+
+    function pick(index: int) {
+        if index >= 0 && index < root.log-rows.length {
+            root.log-selected-row = index;
+            root.detail-open = true;
+            root.select-log(index);
+        }
+    }
+
+    overview := Rectangle {
+        x: root.inset;
+        y: root.compact-height ? 10px : 14px;
+        width: root.width - 2 * root.inset - (root.wide ? root.detail-width + 16px : 0px);
+        height: root.height - self.y - (root.show-detail && !root.wide ? root.detail-height : 0px);
+
+        Label {
+            y: 0px;
+            width: parent.width;
+            height: 30px;
+            text: "决策日志";
+            font-size: 22px;
+            font-weight: 650;
+        }
+        Label {
+            y: root.compact-height ? 29px : 31px;
+            width: parent.width;
+            height: 19px;
+            text: "按账号追踪请求、决策结果和处理耗时。";
+            color: Theme.muted;
+            font-size: 12px;
+        }
+        filters := HorizontalLayout {
+            y: root.compact-height ? 50px : 59px;
+            height: Theme.control;
+            spacing: Theme.space;
+            SelectControl {
+                width: 97px;
+                height: Theme.control;
+                label: "筛选账号";
+                popup-min-width: 180px;
+                options: root.account-options;
+                current-index <=> root.account-index;
+                selected(index) => { root.log-filtered(); }
+            }
+            SelectControl {
+                width: 100px;
+                height: Theme.control;
+                label: "筛选类型";
+                popup-min-width: 140px;
+                options: root.kind-options;
+                current-index <=> root.kind-index;
+                selected(index) => { root.log-filtered(); }
+            }
+            SelectControl {
+                width: 91px;
+                height: Theme.control;
+                label: "筛选结果";
+                popup-min-width: 130px;
+                options: ["全部结果", "有效决策", "无动作", "错误"];
+                current-index <=> root.outcome-index;
+                selected(index) => { root.log-filtered(); }
+            }
+            FieldInput {
+                height: Theme.control;
+                min-width: 87px;
+                placeholder: "搜索请求 ID";
+                label: "搜索请求 ID";
+                text <=> root.query;
+                edited(value) => { root.log-filtered(); }
+            }
+            ToggleControl {
+                height: Theme.control;
+                width: self.min-width;
+                checkbox: true;
+                text: "暂停滚动";
+                checked <=> root.frozen;
+                toggled => { root.log-filtered(); }
+            }
+        }
+        log-table := Rectangle {
+            y: filters.y + filters.height + (root.compact-height ? 8px : 10px);
+            height: max(0px, overview.height - self.y - 29px);
+            background: Theme.sidebar;
+            border-color: Theme.line;
+            border-width: 1px;
+            border-radius: Theme.radius;
+            clip: true;
+
+            Rectangle {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: 32px;
+                background: Theme.surface;
+                LogColumns {
+                    x: 1px;
+                    width: parent.width - 8px;
+                    height: parent.height;
+                    heading: true;
+                    sort-column: root.sort-column;
+                    ascending: root.sort-ascending;
+                    sort(index) => {
+                        root.sort-ascending = root.sort-column != index || !root.sort-ascending;
+                        root.sort-column = index;
+                        root.sort-log(index, root.sort-ascending);
+                    }
+                }
+                Rule { y: parent.height - 1px; }
+            }
+
+            list-focus := FocusScope {
+                x: 1px;
+                y: 33px;
+                width: parent.width - 2px;
+                height: max(0px, parent.height - self.y - 1px);
+                key-pressed(event) => {
+                    if root.log-rows.length > 0 && (event.text == Key.UpArrow || event.text == Key.DownArrow ||
+                        event.text == Key.Home || event.text == Key.End) {
+                        let index = event.text == Key.Home ? 0 :
+                            event.text == Key.End ? root.log-rows.length - 1 :
+                            clamp(root.log-selected-row + (event.text == Key.UpArrow ? -1 : 1), 0, root.log-rows.length - 1);
+                        root.pick(index);
+                        records.viewport-y = min(-index * root.log-row-height,
+                            max(records.viewport-y, records.visible-height - (index + 1) * root.log-row-height));
+                        return accept;
+                    }
+                    return reject;
+                }
+
+                records := ListView {
+                    for record[i] in root.log-rows: Rectangle {
+                        property <bool> selected: i == root.log-selected-row;
+                        height: root.log-row-height;
+                        background: record.alert ? (self.selected ? #542b36 : row-pointer.has-hover ? #43252e : #362029) :
+                            self.selected ? Theme.selected :
+                            row-pointer.has-hover ? Theme.hover : Math.mod(i, 2) == 1 ? #1a1e27 : Theme.sidebar;
+                        accessible-role: button;
+                        accessible-label: record.cells[0].text + " · " + record.cells[2].text + " · " + record.cells[4].text;
+                        accessible-action-default => { root.pick(i); }
+                        if i == root.log-selected-row: Rectangle {
+                            x: 0px;
+                            width: 2px;
+                            background: Theme.accent;
+                        }
+                        LogColumns {
+                            x: 1px;
+                            width: parent.width - 8px;
+                            cells: record.cells;
+                        }
+                        row-pointer := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { list-focus.focus(); root.pick(i); }
+                        }
+                    }
+                }
+            }
+
+            if root.log-rows.length == 0: Label {
+                y: 33px;
+                height: max(0px, parent.height - self.y);
+                width: parent.width;
+                text: "暂无匹配的决策记录";
+                color: Theme.muted;
+                horizontal-alignment: center;
+            }
+        }
+        Label {
+            y: parent.height - 26px;
+            height: 23px;
+            width: parent.width;
+            color: Theme.muted;
+            font-size: Theme.small;
+            text: root.log-count;
+        }
+    }
+
+    if root.show-detail: Rectangle {
+        x: root.wide ? root.width - root.detail-width : 0px;
+        y: root.wide ? 0px : root.height - root.detail-height;
+        width: root.wide ? root.detail-width : parent.width;
+        height: root.wide ? parent.height : root.detail-height;
+        background: Theme.sidebar;
+
+        Rectangle {
+            x: 0px;
+            y: 0px;
+            width: root.wide ? 1px : parent.width;
+            height: root.wide ? parent.height : 1px;
+            background: Theme.line;
+        }
+
+        VerticalLayout {
+            padding-left: root.wide ? 14px : root.inset;
+            padding-right: root.wide ? 14px : root.inset;
+            padding-top: root.compact-height ? 7px : 10px;
+            padding-bottom: root.compact-height ? 8px : 11px;
+            spacing: root.compact-height ? 3px : 5px;
+
+            HorizontalLayout {
+                height: Theme.compact;
+                spacing: 6px;
+                Label {
+                    horizontal-stretch: 1;
+                    min-width: 0px;
+                    text: "决策详情";
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+                ToggleControl {
+                    height: Theme.compact;
+                    width: self.min-width;
+                    enabled: root.has-detail;
+                    checkbox: true;
+                    text: "原始 JSON";
+                    checked <=> root.raw-detail;
+                }
+                if !root.wide: Action {
+                    text: "收起";
+                    quiet: true;
+                    height: Theme.compact;
+                    clicked => { root.detail-open = false; }
+                }
+            }
+            Label {
+                height: 17px;
+                text: root.detail-title;
+                color: root.has-detail ? Theme.fg : Theme.muted;
+                font-weight: root.has-detail ? 600 : 400;
+            }
+            if root.has-detail: Label {
+                height: 28px;
+                text: root.detail-meta;
+                color: Theme.muted;
+                font-size: Theme.small;
+            }
+            if root.has-detail: HorizontalLayout {
+                vertical-stretch: 1;
+                spacing: 10px;
+                LogDetailColumn {
+                    heading: "请求";
+                    content: root.raw-detail ? root.request-json : root.request-summary;
+                }
+                LogDetailColumn {
+                    heading: "结果";
+                    content: root.raw-detail ? root.response-json : root.response-summary;
+                }
+            }
+            if !root.has-detail: Rectangle { vertical-stretch: 1; }
+        }
+    }
+}

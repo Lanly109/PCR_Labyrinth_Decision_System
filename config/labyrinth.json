@@ -1,0 +1,354 @@
+{
+    "model": {
+        "candidate_seed": 20261101,
+        "candidates": 64,
+        "directory": "models",
+        "gpu_adapter": null,
+        "threads": 4,
+        "use_gpu": true
+    },
+    "policies": {
+        "event": {
+            "enabled": true,
+            "fixed_choices": {
+                "1101": 1,
+                "1102": 1,
+                "1103": 1,
+                "1104": 2,
+                "1105": 2,
+                "1107": 1,
+                "1108": 2,
+                "1109": 2,
+                "1110": 3,
+                "1111": 1,
+                "1112": 2,
+                "1113": 2,
+                "1117": 2,
+                "1314": 1,
+                "1315": 1,
+                "1316": 1,
+                "2314": 1,
+                "2315": 1,
+                "2316": 2,
+                "3314": 1,
+                "3315": 1,
+                "3316": 2
+            }
+        },
+        "opening": {
+            "boss_unit_ids": {
+                "3": [
+                    301206,
+                    319604
+                ],
+                "5": [
+                    301701,
+                    302501,
+                    310103,
+                    319401,
+                    315004
+                ]
+            },
+            "enabled": true,
+            "max_attempts": 1000,
+            "regions": {
+                "1": {
+                    "relic": 1,
+                    "ticket": 2
+                },
+                "2": {
+                    "hard": 1,
+                    "relic": 2,
+                    "ticket": 2
+                },
+                "3": {
+                    "event": 1,
+                    "hard": 1,
+                    "ticket": 1
+                },
+                "4": {
+                    "event": 1,
+                    "hard": 2,
+                    "ticket": 2
+                },
+                "5": {
+                    "event": 1,
+                    "hard": 2,
+                    "relic": 1
+                }
+            }
+        },
+        "path": {
+            "enabled": true
+        },
+        "relic_choice": {
+            "enabled": true,
+            "mark_priority": [
+                2,
+                1,
+                4,
+                3,
+                5
+            ]
+        },
+        "score_farm": {
+            "enabled": true,
+            "minimum_score_by_guild": {
+                "1": 50600,
+                "10": 50600,
+                "2": 50600,
+                "3": 52000,
+                "4": 50600,
+                "5": 51200,
+                "6": 50600,
+                "7": 50600,
+                "8": 50600,
+                "9": 50600
+            }
+        },
+        "select_ticket": {
+            "enabled": true,
+            "opening_enabled": true,
+            "opening_ticket_units": {
+                "13000009": [
+                    102501,
+                    130801,
+                    110301
+                ]
+            },
+            "ticket_priority_units": {
+                "11000000": [
+                    129001,
+                    136001,
+                    123001,
+                    135501
+                ],
+                "11000999": [
+                    129001,
+                    123001,
+                    180901,
+                    135501
+                ],
+                "11001000": [
+                    135501
+                ],
+                "11002000": [
+                    180801,
+                    135301
+                ],
+                "11003000": [
+                    180901,
+                    135201,
+                    135001
+                ],
+                "11004000": [
+                    134601
+                ],
+                "11005000": [
+                    136001,
+                    134501,
+                    133001,
+                    133801
+                ],
+                "11006000": [
+                    134701,
+                    129001,
+                    123001,
+                    134001
+                ],
+                "11007000": [
+                    130901,
+                    180401
+                ],
+                "11008000": [
+                    105401
+                ]
+            }
+        },
+        "shop": {
+            "enabled": true,
+            "model": {
+                "base_prices": {
+                    "choice_imprint": 2800,
+                    "random_imprint": 1200,
+                    "relic": [
+                        1800,
+                        2800,
+                        3800
+                    ]
+                },
+                "refresh_fees": [
+                    300,
+                    600
+                ],
+                "regions": {
+                    "2": {
+                        "choice_slots": 0,
+                        "random_slots": 3,
+                        "relic_slots": 3,
+                        "relic_star_probabilities": [
+                            [
+                                0.5901,
+                                0.3561,
+                                0.0538
+                            ],
+                            [
+                                0.5901,
+                                0.3561,
+                                0.0538
+                            ],
+                            [
+                                0.5901,
+                                0.3561,
+                                0.0538
+                            ]
+                        ]
+                    },
+                    "3": {
+                        "choice_slots": 0,
+                        "random_slots": 3,
+                        "relic_slots": 3,
+                        "relic_star_probabilities": [
+                            [
+                                0.5852,
+                                0.3583,
+                                0.0565
+                            ],
+                            [
+                                0.5676,
+                                0.3713,
+                                0.0611
+                            ],
+                            [
+                                0.5651,
+                                0.3757,
+                                0.0592
+                            ]
+                        ]
+                    },
+                    "4": {
+                        "choice_slots": 1,
+                        "fixed_relic_ids": [
+                            30001,
+                            31006,
+                            32006,
+                            33006,
+                            34006,
+                            35006
+                        ],
+                        "random_slots": 2
+                    },
+                    "5": {
+                        "choice_slots": 1,
+                        "random_slots": 2,
+                        "relic_slots": 3,
+                        "relic_star_probabilities": [
+                            [
+                                0.4864,
+                                0.4419,
+                                0.0717
+                            ],
+                            [
+                                0.4474,
+                                0.4795,
+                                0.0732
+                            ],
+                            [
+                                0.4516,
+                                0.4724,
+                                0.0761
+                            ]
+                        ]
+                    }
+                },
+                "scores": {
+                    "imprint": 100,
+                    "relic": 200
+                }
+            },
+            "regions": {
+                "2": {
+                    "purchase": false,
+                    "reserve_gold": 0
+                },
+                "3": {
+                    "purchase": true,
+                    "reserve_gold": 0
+                },
+                "4": {
+                    "purchase": true,
+                    "reserve_gold": 10000
+                },
+                "5": {
+                    "purchase": true,
+                    "reserve_gold": 0
+                }
+            }
+        },
+        "team": {
+            "battle_retry": {
+                "max_retries": 3,
+                "on_limit": "restart"
+            },
+            "enabled": true,
+            "ignore_npc": false,
+            "scopes": {
+                "boss": true,
+                "ex": true,
+                "normal": true
+            }
+        },
+        "ticket_choice": {
+            "enabled": true,
+            "talent_priority": [
+                1,
+                4,
+                5,
+                3,
+                2
+            ]
+        },
+        "ticket_clear": {
+            "guild_ids": [
+                5
+            ]
+        },
+        "unit_choice_targets": {
+            "boss_targets": {
+                "3": {
+                    "parties": 1,
+                    "weight": 3
+                },
+                "5": {
+                    "parties": 3,
+                    "weight": 2
+                }
+            },
+            "difficulty": 5,
+            "enabled": true,
+            "ex_weights": {
+                "770120101": 2,
+                "770120201": 4,
+                "770120301": 0,
+                "770120401": 0,
+                "770120501": 0,
+                "770120601": 0,
+                "770120701": 0,
+                "770120801": 0,
+                "770120901": 0,
+                "770121001": 0,
+                "770121101": 0,
+                "770121201": 0,
+                "770421301": 3,
+                "770421401": 3
+            }
+        }
+    },
+    "schema_version": 1,
+    "server": {
+        "catalog": "data/game_catalog.json",
+        "host": "127.0.0.1",
+        "log_history_limit": 0,
+        "port": 8081
+    }
+}

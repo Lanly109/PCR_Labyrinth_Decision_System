@@ -1,0 +1,1079 @@
+import { ScrollView, TextEdit } from "std-widgets.slint";
+import { Action, ClickTarget, FieldInput, Label, Rule, SelectControl, StatusTag, Theme, ToggleControl } from "controls.slint";
+
+export struct SettingToggleOption {
+    key: string,
+    label: string,
+    checked: bool,
+    portrait: image,
+}
+
+export struct RankedButton {
+    key: string,
+    label: string,
+    rank: int,
+    portrait: image,
+}
+
+export struct TicketPickerData {
+    labels: [string],
+    index: int,
+    total: int,
+    candidates: [RankedButton],
+    priority: [RankedButton],
+}
+
+export struct SettingRow {
+    key: string,
+    kind: int,
+    title: string,
+    hint: string,
+    value: string,
+    checked: bool,
+    options: [string],
+    selected: int,
+    numeric: bool,
+    path-kind: int,
+    order-group: string,
+    order-index: int,
+    order-count: int,
+    toggle-options: [SettingToggleOption],
+    portrait-options: bool,
+    toggle-minimum: int,
+    toggle-selected-count: int,
+    toggle-exclusive: bool,
+}
+
+export struct MatrixCell {
+    key: string,
+    value: string,
+    is-boolean: bool,
+    checked: bool,
+}
+
+export struct MatrixRow {
+    label: string,
+    cells: [MatrixCell],
+}
+
+export struct SettingsMatrix {
+    title: string,
+    headers: [string],
+    rows: [MatrixRow],
+}
+
+component GroupHeading inherits Rectangle {
+    in property <string> text;
+    height: 36px;
+    Label {
+        width: parent.width;
+        height: parent.height;
+        font-size: 12px;
+        font-weight: 600;
+        color: Theme.accent-text;
+        text: root.text;
+    }
+    Rule { y: parent.height - 1px; }
+}
+
+component EventLine inherits Rectangle {
+    in property <bool> heading;
+    in property <string> title;
+    in property <string> detail;
+    in property <string> number;
+    in property <bool> interactive;
+    in property <bool> checked;
+    callback activated();
+
+    forward-focus: target;
+
+    height: root.heading ? max(36px, caption.height + 22px) :
+        max(26px, caption.height + (root.detail == "" ? 0px : reward.height + 2px) + 8px);
+
+    if root.heading: Rule { y: 5px; }
+
+    badge := Rectangle {
+        width: root.heading ? code.preferred-width + 14px : 22px;
+        height: root.heading ? 20px : 18px;
+        x: root.heading ? parent.width - self.width : 8px;
+        y: root.heading ? 12px : 4px;
+        background: root.heading ? Theme.surface : root.checked ? Theme.accent :
+            target.hovered ? Theme.hover : Theme.control-bg;
+        border-radius: 4px;
+        border-width: target.has-focus ? 1px : 0px;
+        border-color: root.checked ? Theme.fg : Theme.accent;
+        code := Label {
+            text: root.heading ? "#" + root.number : root.number;
+            horizontal-alignment: center;
+            font-size: Theme.small;
+            font-weight: root.checked ? 600 : 400;
+            color: root.heading ? Theme.muted : root.checked ? Theme.on-accent : Theme.accent-text;
+        }
+    }
+
+    caption := Label {
+        x: root.heading ? 0px : badge.x + badge.width + 8px;
+        y: root.heading ? 13px : 4px;
+        width: max(0px, root.heading ? badge.x - 12px : parent.width - self.x);
+        height: self.preferred-height;
+        text: root.title;
+        font-size: root.heading ? 14px : 12px;
+        font-weight: root.heading ? 600 : 400;
+        wrap: word-wrap;
+        overflow: clip;
+    }
+    reward := Label {
+        x: caption.x;
+        y: caption.y + caption.height + 2px;
+        width: caption.width;
+        height: self.preferred-height;
+        text: root.detail;
+        color: Theme.muted;
+        font-size: Theme.small;
+        wrap: word-wrap;
+        overflow: clip;
+    }
+
+    target := ClickTarget {
+        interactive: root.interactive;
+        visible: root.interactive;
+        accessible-role: AccessibleRole.radio-button;
+        accessible-label: root.number + " · " + root.title;
+        accessible-description: root.detail;
+        accessible-checked: root.checked;
+        accessible-action-default => { if root.interactive { root.activated(); } }
+        activate => { root.activated(); }
+    }
+}
+
+component DragGrip inherits Rectangle {
+    in property <bool> active;
+    in property <bool> horizontal;
+    callback started(length);
+    callback moved-to(length);
+    callback ended();
+    callback cancelled();
+
+    width: 24px;
+    height: Theme.control;
+    border-radius: Theme.radius;
+    background: root.active || grip.has-hover ? Theme.selected : transparent;
+    for dot[i] in 6: Rectangle {
+        width: 2px;
+        height: 2px;
+        border-radius: 1px;
+        x: 8px + Math.mod(i, 2) * 5px;
+        y: 11px + Math.floor(i / 2) * 5px;
+        background: root.active || grip.has-hover ? Theme.accent-text : Theme.muted;
+    }
+    grip := TouchArea {
+        mouse-cursor: MouseCursor.move;
+        property <length> coordinate: root.horizontal ?
+            self.absolute-position.x + self.mouse-x : self.absolute-position.y + self.mouse-y;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.cancel {
+                root.cancelled();
+            } else if event.button == PointerEventButton.left {
+                if event.kind == PointerEventKind.down {
+                    root.started(self.coordinate);
+                } else if event.kind == PointerEventKind.up {
+                    root.moved-to(self.coordinate);
+                    root.ended();
+                }
+            }
+        }
+        moved => {
+            if self.pressed { root.moved-to(self.coordinate); }
+        }
+    }
+}
+
+component PortraitCaption inherits Rectangle {
+    in property <string> label;
+    in property <image> portrait;
+    in property <bool> highlighted;
+    property <bool> has-portrait: root.portrait.width > 0;
+
+    if root.has-portrait: Image {
+        x: (root.width - self.width) / 2;
+        y: 4px;
+        width: min(46px, max(0px, root.width - 8px));
+        height: self.width;
+        source: root.portrait;
+        image-fit: contain;
+    }
+    Label {
+        x: 3px;
+        y: root.has-portrait ? parent.height - 17px : 0px;
+        width: max(0px, parent.width - 6px);
+        height: root.has-portrait ? 15px : parent.height;
+        horizontal-alignment: center;
+        text: root.label;
+        color: root.highlighted ? Theme.accent-text : Theme.fg;
+        font-size: Theme.small;
+    }
+}
+
+component PortraitButton inherits Rectangle {
+    in property <string> label;
+    in property <image> portrait;
+    in property <bool> checked;
+    in property <int> rank;
+    callback clicked();
+
+    forward-focus: target;
+    border-radius: Theme.radius;
+    border-width: root.checked || target.has-focus ? 1px : 0px;
+    border-color: root.checked || target.has-focus ? Theme.accent : transparent;
+    background: target.pressed ? Theme.control-bg : root.checked ? Theme.selected :
+        target.hovered || target.has-focus ? Theme.hover : transparent;
+    accessible-role: AccessibleRole.checkbox;
+    accessible-label: root.label;
+    accessible-description: root.rank > 0 ? "优先级 " + root.rank : "";
+    accessible-checked: root.checked;
+    accessible-action-default => { root.clicked(); }
+
+    PortraitCaption {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+        label: root.label;
+        portrait: root.portrait;
+        highlighted: root.checked;
+    }
+    if root.checked: Rectangle {
+        x: parent.width - self.width - 4px;
+        y: 4px;
+        width: max(16px, badge.preferred-width + 6px);
+        height: 16px;
+        border-radius: 4px;
+        background: Theme.accent;
+        badge := Label {
+            width: parent.width;
+            height: parent.height;
+            horizontal-alignment: center;
+            text: root.rank > 0 ? "" + root.rank : "✓";
+            font-size: 10px;
+            font-weight: 600;
+            color: Theme.on-accent;
+        }
+    }
+    target := ClickTarget {
+        activate => { root.clicked(); }
+    }
+}
+
+component PriorityStrip inherits Rectangle {
+    in property <[RankedButton]> items;
+    in property <bool> compact;
+    in property <int> context-index;
+    callback ordered(string, int);
+    callback removed(string);
+    out property <length> item-height: compact ? Theme.control : Theme.portrait-height;
+
+    property <length> gap: Theme.space;
+    property <length> priority-width: compact ? 86px : Theme.portrait-width + 24px;
+    property <length> stride: priority-width + gap;
+    property <int> selection: -1;
+    property <int> drag-from: -1;
+    property <length> drag-start;
+    property <length> drag-current;
+    property <length> scroll-start;
+    property <int> drag-target: clamp(drag-from +
+        Math.round((drag-current - drag-start - (strip.viewport-x - scroll-start)) / stride),
+        0, max(0, items.length - 1));
+
+    changed context-index => {
+        root.selection = -1;
+        root.drag-from = -1;
+        strip.viewport-x = 0px;
+    }
+
+    Timer {
+        interval: 48ms;
+        running: root.drag-from >= 0;
+        triggered => {
+            let left = strip.absolute-position.x;
+            let right = left + strip.visible-width;
+            if root.drag-current < left + 22px {
+                strip.viewport-x = min(0px, strip.viewport-x + 12px);
+            } else if root.drag-current > right - 22px {
+                strip.viewport-x = max(min(0px, strip.visible-width - strip.viewport-width),
+                    strip.viewport-x - 12px);
+            }
+        }
+    }
+
+    strip := ScrollView {
+        width: root.width;
+        height: root.height;
+        horizontal-scrollbar-policy: as-needed;
+        vertical-scrollbar-policy: always-off;
+        viewport-width: max(self.visible-width, root.items.length * root.stride - root.gap);
+        viewport-height: root.item-height;
+        if root.items.length == 0: Label {
+            x: 0px;
+            width: parent.width;
+            height: Theme.control;
+            color: Theme.muted;
+            text: "点击候选角色，按选入顺序加入队列";
+        }
+        for unit[i] in root.items: Rectangle {
+            x: i * root.stride;
+            width: root.priority-width;
+            height: root.item-height;
+            if !root.compact: PortraitButton {
+                x: 24px;
+                width: Theme.portrait-width;
+                height: parent.height;
+                label: unit.label;
+                portrait: unit.portrait;
+                checked: true;
+                rank: unit.rank;
+                clicked => { root.removed(unit.key); }
+            }
+            if root.compact: Action {
+                x: 23px;
+                width: parent.width - self.x;
+                height: parent.height;
+                inset: 4px;
+                text: unit.rank + "  " + unit.label;
+                selected: root.selection == i;
+                clicked => {
+                    if root.selection < 0 {
+                        root.selection = i;
+                    } else {
+                        let from = root.selection;
+                        root.selection = -1;
+                        if from != i { root.ordered(root.items[from].key, i - from); }
+                    }
+                }
+            }
+            DragGrip {
+                x: 0px;
+                y: (parent.height - self.height) / 2;
+                horizontal: true;
+                active: root.drag-from == i;
+                started(x) => {
+                    root.selection = -1;
+                    root.drag-from = i;
+                    root.drag-start = x;
+                    root.drag-current = x;
+                    root.scroll-start = strip.viewport-x;
+                }
+                moved-to(x) => { root.drag-current = x; }
+                ended => {
+                    let delta = root.drag-target - i;
+                    root.drag-from = -1;
+                    if delta != 0 { root.ordered(unit.key, delta); }
+                }
+                cancelled => { root.drag-from = -1; }
+            }
+            if root.drag-from >= 0 && root.drag-from != i && root.drag-target == i: Rectangle {
+                x: root.drag-from < i ? parent.width - 2px : 0px;
+                width: 2px;
+                height: parent.height;
+                background: Theme.accent;
+            }
+        }
+    }
+}
+
+component TicketPickerView inherits Rectangle {
+    in property <TicketPickerData> data;
+    in-out property <string> query;
+    callback ticket-changed(int);
+    callback filtered(string);
+    callback edited(string, string);
+    callback ordered(string, int);
+
+    property <length> gap: Theme.space;
+    property <length> tab-width: 86px;
+    property <length> card-width: Theme.portrait-width;
+    property <int> tab-columns: max(1, Math.floor((root.width + gap) / (tab-width + gap)));
+    property <int> card-columns: max(1, Math.floor((root.width + gap) / (card-width + gap)));
+    property <bool> expanded: true;
+    height: content.preferred-height;
+
+    content := VerticalLayout {
+        width: parent.width;
+        height: self.preferred-height;
+        alignment: start;
+        padding-top: 8px;
+        spacing: 8px;
+
+        Rectangle {
+            height: (Math.floor((root.data.labels.length - 1) / root.tab-columns) + 1) *
+                (Theme.compact + root.gap) - root.gap;
+            for label[i] in root.data.labels: Action {
+                x: Math.mod(i, root.tab-columns) * (root.tab-width + root.gap);
+                y: Math.floor(i / root.tab-columns) * (Theme.compact + root.gap);
+                width: root.tab-width;
+                height: Theme.compact;
+                text: label;
+                selected: i == root.data.index;
+                accessible-role: AccessibleRole.radio-button;
+                accessible-checked: self.selected;
+                clicked => { if !self.selected { root.ticket-changed(i); } }
+            }
+        }
+
+        HorizontalLayout {
+            height: Theme.control;
+            spacing: 12px;
+            Label {
+                min-width: 0px;
+                horizontal-stretch: 1;
+                text: root.data.labels[root.data.index] + " · 已选 " + root.data.priority.length + " / " + root.data.total;
+                font-weight: 600;
+            }
+            FieldInput {
+                width: min(240px, root.width * 0.48);
+                height: Theme.control;
+                label: "搜索候选角色";
+                placeholder: "搜索昵称、角色名或 ID";
+                text <=> root.query;
+                edited(value) => { root.filtered(value); }
+            }
+        }
+
+        Action {
+            width: 104px;
+            height: Theme.compact;
+            text: root.expanded ? "优先队列 ▾" : "优先队列 ▸";
+            quiet: true;
+            left: true;
+            inset: 0px;
+            accessible-expandable: true;
+            accessible-expanded: root.expanded;
+            clicked => { root.expanded = !root.expanded; }
+        }
+        PriorityStrip {
+            visible: root.expanded;
+            height: root.expanded ? self.item-height + 12px : 0px;
+            items: root.data.priority;
+            context-index: root.data.index;
+            ordered(key, delta) => { root.ordered(key, delta); }
+            removed(key) => { root.edited(key, "false"); }
+        }
+        if root.data.candidates.length == 0: Label {
+            height: Theme.row;
+            text: "没有匹配的角色";
+            color: Theme.muted;
+        }
+        Rectangle {
+            height: root.data.candidates.length == 0 ? 0px :
+                (Math.floor((root.data.candidates.length - 1) / root.card-columns) + 1) *
+                (Theme.portrait-height + root.gap) - root.gap;
+            for unit[i] in root.data.candidates: PortraitButton {
+                x: Math.mod(i, root.card-columns) * (root.card-width + root.gap);
+                y: Math.floor(i / root.card-columns) * (Theme.portrait-height + root.gap);
+                width: root.card-width;
+                height: Theme.portrait-height;
+                label: unit.label;
+                portrait: unit.portrait;
+                checked: unit.rank > 0;
+                rank: unit.rank;
+                clicked => { root.edited(unit.key, self.checked ? "false" : "true"); }
+            }
+        }
+    }
+}
+
+component ToggleButtonGrid inherits Rectangle {
+    in property <[SettingToggleOption]> options;
+    in property <int> minimum;
+    in property <int> initial-selected-count;
+    in property <bool> exclusive;
+    in property <bool> portraits;
+    callback edited(string, string);
+
+    property <int> selection-delta;
+    property <string> selection-key;
+    changed options => {
+        root.selection-delta = 0;
+        root.selection-key = "";
+    }
+    property <bool> at-minimum: initial-selected-count + selection-delta <= minimum;
+    property <length> button-width: portraits ? Theme.portrait-width : 120px;
+    property <length> button-height: portraits ? Theme.portrait-height : Theme.control;
+    property <length> gap: Theme.space;
+    property <int> columns: max(1, Math.floor((root.width + gap) / (button-width + gap)));
+    property <int> rows: options.length == 0 ? 0 : Math.floor((options.length - 1) / columns) + 1;
+    height: rows == 0 ? 0px : 16px + rows * button-height + (rows - 1) * gap;
+
+    for option[index] in root.options: Rectangle {
+        property <bool> checked: option.checked;
+        function toggle() {
+            if !self.checked || !root.at-minimum {
+                self.checked = !self.checked;
+                root.selection-delta += self.checked ? 1 : -1;
+                root.edited(option.key, self.checked ? "true" : "false");
+            }
+        }
+        x: Math.mod(index, root.columns) * (root.button-width + root.gap);
+        y: 8px + Math.floor(index / root.columns) * (root.button-height + root.gap);
+        width: min(root.button-width, root.width);
+        height: root.button-height;
+        if root.exclusive: Action {
+            width: parent.width;
+            height: parent.height;
+            text: option.label;
+            primary: root.selection-key == "" ? option.checked : option.key == root.selection-key;
+            accessible-role: AccessibleRole.radio-button;
+            accessible-checked: self.primary;
+            clicked => {
+                if !self.primary {
+                    root.selection-key = option.key;
+                    root.edited(option.key, "true");
+                }
+            }
+        }
+        if root.portraits: PortraitButton {
+            width: parent.width;
+            height: parent.height;
+            label: option.label;
+            portrait: option.portrait;
+            checked: parent.checked;
+            clicked => { parent.toggle(); }
+        }
+        if !root.exclusive && !root.portraits: Action {
+            width: parent.width;
+            height: parent.height;
+            text: option.label;
+            primary: parent.checked;
+            accessible-role: AccessibleRole.checkbox;
+            accessible-checked: self.primary;
+            clicked => { parent.toggle(); }
+        }
+    }
+}
+
+component SettingLine inherits Rectangle {
+    in property <SettingRow> field;
+    in property <length> label-width;
+    in property <bool> dragged;
+    in property <bool> drop-target;
+    in property <bool> drop-after;
+    callback edited(string, string);
+    callback ordered(string, int);
+    callback browse(string, string);
+    callback drag-start(SettingRow, length);
+    callback drag-move(length);
+    callback drag-end();
+    callback drag-cancel();
+
+    property <bool> reorderable: field.order-count > 1;
+    property <bool> prose-only: field.kind == 4 && field.value == "";
+    property <bool> event-line: field.kind == 5 || field.kind == 6;
+    property <bool> button-group: field.kind == 7;
+    property <bool> labeled-button-group: root.button-group && field.title != "";
+    property <length> control-x: label-width + 16px;
+    property <length> control-width: max(0px, root.width - control-x);
+
+    height: root.event-line ? event.height : root.button-group ? toggle-grid.height :
+        field.kind == 0 ? 36px : max(Theme.row, title.preferred-height +
+        (field.hint == "" ? 0px : hint.preferred-height + 2px) + 12px);
+    border-radius: Theme.radius;
+    background: dragged ? Theme.selected : transparent;
+
+    if field.kind == 0: GroupHeading { text: field.title; }
+
+    toggle-grid := ToggleButtonGrid {
+        visible: root.button-group;
+        x: root.labeled-button-group ? root.control-x : 0px;
+        y: 0px;
+        width: root.labeled-button-group ? root.control-width : parent.width;
+        options: root.field.toggle-options;
+        minimum: root.field.toggle-minimum;
+        initial-selected-count: root.field.toggle-selected-count;
+        exclusive: root.field.toggle-exclusive;
+        portraits: root.field.portrait-options;
+        edited(key, value) => { root.edited(key, value); }
+    }
+
+    event := EventLine {
+        visible: root.event-line;
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        heading: root.field.kind == 5;
+        title: root.field.title;
+        detail: root.field.hint;
+        number: root.field.value;
+        interactive: root.field.kind == 6;
+        checked: root.field.kind == 6 && root.field.checked;
+        activated => { root.edited(root.field.key, root.field.value); }
+    }
+
+    labels := Rectangle {
+        visible: field.kind != 0 && !root.event-line && (!root.button-group || root.labeled-button-group);
+        x: reorderable ? 30px : 0px;
+        width: root.prose-only ? root.width : max(0px, root.label-width - self.x);
+        y: (parent.height - self.height) / 2;
+        height: title.preferred-height + (field.hint == "" ? 0px : hint.preferred-height + 2px);
+
+        title := Label {
+            y: 0px;
+            width: parent.width;
+            height: self.preferred-height;
+            text: field.title;
+            wrap: word-wrap;
+            overflow: clip;
+        }
+        hint := Label {
+            y: title.height + 2px;
+            width: parent.width;
+            height: self.preferred-height;
+            text: field.hint;
+            color: Theme.muted;
+            font-size: Theme.small;
+            wrap: word-wrap;
+            overflow: clip;
+        }
+    }
+
+    if reorderable: DragGrip {
+        x: 0px;
+        y: (parent.height - self.height) / 2;
+        active: root.dragged;
+        started(pointer-y) => { root.drag-start(root.field, pointer-y); }
+        moved-to(pointer-y) => { root.drag-move(pointer-y); }
+        ended => { root.drag-end(); }
+        cancelled => { root.drag-cancel(); }
+    }
+    if drop-target: Rectangle {
+        y: root.drop-after ? parent.height - 2px : 0px;
+        height: 2px;
+        background: Theme.accent;
+        border-radius: 1px;
+    }
+
+    if field.kind != 0 && !root.prose-only && !root.event-line && !root.button-group: Rectangle {
+        x: root.control-x;
+        width: root.control-width;
+
+        if field.kind == 1: ToggleControl {
+            x: 0px;
+            y: (parent.height - self.height) / 2;
+            width: self.min-width;
+            height: Theme.control;
+            text: self.checked ? "启用" : "关闭";
+            accessible-label: field.title;
+            checked: field.checked;
+            toggled => { root.edited(field.key, self.checked ? "true" : "false"); }
+        }
+        if field.kind == 2: HorizontalLayout {
+            y: (parent.height - Theme.control) / 2;
+            height: Theme.control;
+            spacing: Theme.space;
+            path := FieldInput {
+                height: Theme.control;
+                label: field.title;
+                numeric: field.numeric;
+                text: field.value;
+                edited(value) => { root.edited(field.key, value); }
+            }
+            if field.path-kind != 0: Action {
+                text: "浏览…";
+                height: Theme.control;
+                clicked => { root.browse(field.key, path.text); }
+            }
+        }
+        if field.kind == 3: HorizontalLayout {
+            y: (parent.height - Theme.control) / 2;
+            height: Theme.control;
+            spacing: 5px;
+            SelectControl {
+                height: Theme.control;
+                label: field.value == "" ? field.title : field.value + " · " + field.title;
+                options: field.options;
+                current-index: field.selected;
+                popup-min-width: 255px;
+                selected(index) => { root.edited(field.key, "\{index}"); }
+            }
+            if reorderable: Action {
+                text: "↑";
+                description: "上移";
+                quiet: true;
+                width: 27px;
+                height: Theme.control;
+                inset: 2px;
+                enabled: field.order-index > 0;
+                clicked => { root.ordered(field.key, -1); }
+            }
+            if reorderable: Action {
+                text: "↓";
+                description: "下移";
+                quiet: true;
+                width: 27px;
+                height: Theme.control;
+                inset: 2px;
+                enabled: field.order-index + 1 < field.order-count;
+                clicked => { root.ordered(field.key, 1); }
+            }
+        }
+        if field.kind == 4: Label {
+            width: parent.width;
+            text: field.value;
+            color: Theme.muted;
+            height: parent.height;
+            wrap: word-wrap;
+            overflow: clip;
+        }
+    }
+}
+
+component MatrixTable inherits VerticalLayout {
+    in property <SettingsMatrix> table;
+    in property <length> form-label-width;
+    callback edited(string, string);
+
+    property <length> label-width: table.headers.length > 4 ? 83px : form-label-width;
+    property <length> columns-x: label-width + 16px;
+    property <length> column-step: (root.width - columns-x) / max(1, table.headers.length);
+
+    spacing: 0px;
+    GroupHeading { text: table.title; }
+    Rectangle {
+        height: 31px;
+        Label {
+            text: "项目";
+            x: 0px;
+            width: root.label-width;
+            height: parent.height;
+            color: Theme.muted;
+            font-size: Theme.small;
+        }
+        for heading[i] in table.headers: Label {
+            x: root.columns-x + root.column-step * i;
+            width: max(0px, root.column-step - 7px);
+            height: parent.height;
+            text: heading;
+            color: Theme.muted;
+            font-size: Theme.small;
+        }
+    }
+    for entry in table.rows: Rectangle {
+        height: Theme.row;
+        Label {
+            text: entry.label;
+            x: 0px;
+            width: root.label-width;
+            height: parent.height;
+        }
+        for cell[i] in entry.cells: Rectangle {
+            x: root.columns-x + root.column-step * i;
+            width: max(0px, root.column-step - 7px);
+            if cell.is-boolean: ToggleControl {
+                x: 0px;
+                width: self.min-width;
+                y: (parent.height - self.height) / 2;
+                height: Theme.control;
+                checkbox: true;
+                checked: cell.checked;
+                accessible-label: entry.label + " · " + table.headers[i];
+                toggled => { root.edited(cell.key, self.checked ? "true" : "false"); }
+            }
+            if !cell.is-boolean: FieldInput {
+                y: (parent.height - self.height) / 2;
+                height: Theme.control;
+                label: entry.label + " · " + table.headers[i];
+                text: cell.value;
+                edited(value) => { root.edited(cell.key, value); }
+            }
+        }
+    }
+}
+
+export component SettingsView inherits Rectangle {
+    in property <int> section;
+    in property <string> section-title;
+    in property <string> section-description;
+    in property <[SettingRow]> settings;
+    in property <[SettingsMatrix]> matrices;
+    in property <[string]> opening-map-columns;
+    in property <string> subpage-title;
+    in property <int> subpage-index;
+    in property <TicketPickerData> ticket-picker;
+    in property <[RankedButton]> priority-options;
+    in-out property <string> ticket-query;
+    callback ticket-changed(int);
+    in-out property <string> raw-draft;
+    in property <bool> dirty;
+    in property <string> config-message;
+    in property <bool> config-error;
+    in property <bool> busy;
+    in property <string> status-text;
+    in property <color> status-color;
+    callback setting-edited(string, string);
+    callback order-edited(string, int);
+    callback ticket-filtered(string);
+    callback browse-path(string, string);
+    callback apply-raw(string);
+    callback save-config();
+    callback revert-config();
+
+    property <bool> opening-roster: section == 2 && subpage-index == 1;
+    property <length> inset: Theme.gutter;
+    property <length> label-width: min(176px, form.width * 0.34);
+    property <bool> dragging;
+    property <string> drag-key;
+    property <string> drag-group;
+    property <int> drag-index;
+    property <int> drag-count;
+    property <length> drag-start-y;
+    property <length> drag-y;
+    property <length> drag-start-scroll;
+    // A priority group is a run of adjacent, equally tall rows.
+    property <int> drag-target: clamp(drag-index +
+        Math.round((drag-y - drag-start-y - (scroller.viewport-y - drag-start-scroll)) / Theme.row),
+        0, max(0, drag-count - 1));
+
+    changed section => { root.reset-scroll(); }
+    changed subpage-index => { root.reset-scroll(); }
+
+    function reset-scroll() {
+        root.dragging = false;
+        scroller.viewport-y = 0px;
+    }
+
+    function start-drag(field: SettingRow, pointer-y: length) {
+        root.drag-key = field.key;
+        root.drag-group = field.order-group;
+        root.drag-index = field.order-index;
+        root.drag-count = field.order-count;
+        root.drag-start-y = pointer-y;
+        root.drag-y = pointer-y;
+        root.drag-start-scroll = scroller.viewport-y;
+        root.dragging = true;
+    }
+
+    function end-drag() {
+        if root.dragging {
+            root.dragging = false;
+            if root.drag-target != root.drag-index {
+                root.order-edited(root.drag-key, root.drag-target - root.drag-index);
+            }
+        }
+    }
+
+    Timer {
+        interval: 48ms;
+        running: root.dragging;
+        triggered => {
+            let top = scroller.absolute-position.y;
+            let bottom = top + scroller.visible-height;
+            if root.drag-y < top + 24px {
+                scroller.viewport-y = min(0px, scroller.viewport-y + 12px);
+            } else if root.drag-y > bottom - 24px {
+                scroller.viewport-y = max(min(0px, scroller.visible-height - scroller.viewport-height),
+                    scroller.viewport-y - 12px);
+            }
+        }
+    }
+
+    background: Theme.base;
+    header := Rectangle {
+        property <length> heading-height: root.section-description == "" ? 36px : 61px;
+        x: root.inset;
+        y: 16px;
+        width: parent.width - 2 * root.inset;
+        height: self.heading-height;
+
+        Label {
+            text: root.section == 0 ? "服务设置" : root.subpage-title == "" ?
+                root.section-title : root.section-title + " / " + root.subpage-title;
+            x: 0px;
+            y: 0px;
+            font-size: 22px;
+            font-weight: 650;
+            height: 31px;
+            width: parent.width;
+        }
+        if root.section-description != "": Label {
+            y: 34px;
+            width: parent.width;
+            height: 19px;
+            text: root.section-description;
+            color: Theme.muted;
+            font-size: 12px;
+        }
+    }
+
+    scroller := ScrollView {
+        x: root.inset;
+        y: header.y + header.height;
+        width: parent.width - 2 * root.inset;
+        height: max(0px, footer.y - self.y - 2px);
+        visible: root.section != 7;
+        horizontal-scrollbar-policy: always-off;
+        mouse-drag-pan-enabled: false;
+        viewport-width: self.visible-width;
+        viewport-height: max(self.visible-height, form.height + 8px);
+
+        form := VerticalLayout {
+            property <length> available-width: max(0px, scroller.visible-width - 8px);
+            x: 0px;
+            y: 0px;
+            width: root.opening-roster || root.ticket-picker.labels.length > 0 ?
+                self.available-width : min(Theme.form-max, self.available-width);
+            height: self.preferred-height;
+            alignment: start;
+            spacing: 0px;
+
+            if root.section == 0: GroupHeading { text: "服务连接"; }
+
+            if root.section == 0: Rectangle {
+                height: Theme.row;
+                Label { x: 0px; width: root.label-width; text: "HTTP / TCP 服务状态"; height: parent.height; }
+                StatusTag {
+                    x: root.label-width + 16px;
+                    y: (parent.height - self.height) / 2;
+                    text: root.status-text;
+                    tone: root.status-color;
+                }
+            }
+
+            for setting in root.settings: SettingLine {
+                field: setting;
+                label-width: root.label-width;
+                dragged: root.dragging && setting.key == root.drag-key;
+                drop-target: root.dragging && setting.order-count > 1 && root.drag-index != root.drag-target &&
+                    setting.order-group == root.drag-group && setting.order-index == root.drag-target;
+                drop-after: root.drag-target > root.drag-index;
+                edited(key, value) => { root.setting-edited(key, value); }
+                ordered(key, delta) => { root.order-edited(key, delta); }
+                browse(key, value) => { root.browse-path(key, value); }
+                drag-start(field, y) => { root.start-drag(field, y); }
+                drag-move(y) => { root.drag-y = y; }
+                drag-end => { root.end-drag(); }
+                drag-cancel => { root.dragging = false; }
+            }
+
+            if root.priority-options.length > 0: PriorityStrip {
+                width: min(form.width, Theme.form-max);
+                height: self.item-height + 12px;
+                compact: true;
+                items: root.priority-options;
+                context-index: root.subpage-index;
+                ordered(key, delta) => { root.order-edited(key, delta); }
+            }
+
+            if root.ticket-picker.labels.length > 0: TicketPickerView {
+                data: root.ticket-picker;
+                query <=> root.ticket-query;
+                ticket-changed(index) => {
+                    root.reset-scroll();
+                    root.ticket-changed(index);
+                }
+                filtered(value) => {
+                    root.reset-scroll();
+                    root.ticket-filtered(value);
+                }
+                edited(key, value) => { root.setting-edited(key, value); }
+                ordered(key, delta) => { root.order-edited(key, delta); }
+            }
+
+            for matrix in root.matrices: MatrixTable {
+                width: min(form.width, Theme.form-max);
+                table: matrix;
+                form-label-width: root.label-width;
+                edited(key, value) => { root.setting-edited(key, value); }
+            }
+
+            if root.opening-map-columns.length > 0: VerticalLayout {
+                padding-top: 8px;
+                spacing: 5px;
+                GroupHeading { text: "各层地图列分布"; }
+                Label {
+                    text: "从左到右排列，省略第 1 列起点。+ 分隔列，/ 分隔同列的格子类型。";
+                    color: Theme.muted;
+                    font-size: Theme.small;
+                    wrap: word-wrap;
+                    overflow: clip;
+                }
+                for sequence[index] in root.opening-map-columns: HorizontalLayout {
+                    spacing: 12px;
+                    Label {
+                        text: "第 \{index + 1} 层";
+                        width: 50px;
+                        vertical-alignment: top;
+                    }
+                    Label {
+                        text: sequence;
+                        font-size: 12px;
+                        min-width: 0px;
+                        horizontal-stretch: 1;
+                        vertical-alignment: top;
+                        wrap: word-wrap;
+                        overflow: clip;
+                    }
+                }
+                Label {
+                    text: "第 4 层括号内是第 5、6 列，两列的格子组合可对调。";
+                    color: Theme.muted;
+                    font-size: Theme.small;
+                    wrap: word-wrap;
+                    overflow: clip;
+                }
+            }
+        }
+    }
+
+    if root.section == 7: TextEdit {
+        x: root.inset;
+        y: header.y + header.height;
+        width: parent.width - 2 * root.inset;
+        height: max(0px, footer.y - self.y - 12px);
+        text <=> root.raw-draft;
+        wrap: no-wrap;
+        font-size: 13px;
+        accessible-label: "全局配置 JSON";
+    }
+
+    footer := Rectangle {
+        y: parent.height - self.height;
+        height: 56px;
+        background: Theme.sidebar;
+
+        Rule { y: 0px; }
+        HorizontalLayout {
+            padding-left: root.inset;
+            padding-right: root.inset;
+            padding-top: 11px;
+            padding-bottom: 11px;
+            spacing: Theme.space;
+
+            Label {
+                min-width: 0px;
+                horizontal-stretch: 1;
+                text: root.config-message != "" ? root.config-message :
+                    root.dirty ? "有未保存的更改" : "配置适用于所有账号";
+                font-size: Theme.small;
+                color: root.config-error ? Theme.error : root.dirty ? Theme.warning : Theme.muted;
+            }
+            if root.section == 7: Action {
+                text: "校验 JSON";
+                enabled: !root.busy;
+                clicked => { root.apply-raw(root.raw-draft); }
+            }
+            Action {
+                text: "撤销更改";
+                quiet: true;
+                enabled: !root.busy;
+                clicked => { root.revert-config(); }
+            }
+            Action {
+                text: "保存配置";
+                primary: true;
+                enabled: !root.busy;
+                clicked => {
+                    if root.section == 7 { root.apply-raw(root.raw-draft); }
+                    if root.section != 7 || !root.config-error { root.save-config(); }
+                }
+            }
+        }
+    }
+}

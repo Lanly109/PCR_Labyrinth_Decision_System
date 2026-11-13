@@ -1,0 +1,44 @@
+{
+  "status": "passed",
+  "max_absolute_errors": {
+    "context": 5.4836273193359375e-06,
+    "decoder": 9.918212890625e-05,
+    "critic": 5.7220458984375e-06
+  },
+  "compared_pointer_logits": 646840,
+  "decoder_batches": [
+    1,
+    7,
+    95
+  ],
+  "all_five_prefix_lengths": true,
+  "owned_rosters": [
+    314,
+    80,
+    105,
+    5
+  ],
+  "critic_batches": [
+    1,
+    7,
+    64,
+    128
+  ],
+  "source_sha256": {
+    "source.json": "0cdbc7bfc20b84c44de9dd8c213511e889e7b373342a5185a5d8226baa3d7d65",
+    "quests.npz": "d72abe25035be121e2ef0ec6e994249327546e6bee868e9690de21c3b979a71f",
+    "entities.npz": "8004cce5d836b1793d84026e0698b36bbe8de4bb848b84a10ca558cd8108a9e8",
+    "normalizer.json": "c157c4e8c14992006252d300ba2ebfe7caf1c28bf7c5b9fb9e56f361ab5ed53b",
+    "entities.json": "9e3d37b40f01647923babfff11c9a418392f091a603f831a3c0e6bb73a71087e",
+    "checkpoint.pt": "371ea01a41f38594a4c42489ec9e3158f9411aec5bbd90bb99d0753daebb8d5a",
+    "manifest.json": "a4862c18b750bfc92286ff0f0d49fc77893acd4f046408ecdb537cf767d6ad6d",
+    "critic-20261101.source.json": "73ff445daacaa0296c1c5483f13f245bd1fade53aa0d3f607b5b129950362f36",
+    "critic-20261101.pt": "75afbd8e164d8e5da6671cfad599db89517ac3be3b66507db3ad0d52bb25d7c4"
+  },
+  "source_unchanged": true,
+  "torch": "2.13.0",
+  "onnx": "1.19.1",
+  "onnxruntime": "1.23.2",
+  "entity_folding": "frozen ID-only intrinsic embeddings; validated against original entity/context",
+  "sampler": "NumPy PCG64 CDF sampling; not bit-identical to Torch.multinomial RNG"
+}

@@ -1,0 +1,12 @@
+{
+  "format": "labyrinth_single_onnx_v1",
+  "files": {
+    "context.onnx": "6673c0b4fe55be4ef5d740697e41f39035db300e80c920dcb38972b0659f5029",
+    "decoder.onnx": "bc4cd289c6afd45fe2f6d8c18449073b70ecd91d96be29224225cacfb2a80323",
+    "critic.onnx": "505a33fd7c56fd19dc4b36a69a42473573327ac8f0cd04c5811c4c570d0a4994",
+    "metadata.json": "df6c396c5cde10a453f1f1ece192916361bf0b0622694e8ff90e849b33b58734",
+    "export_verification.json": "1cc91d345bfd63e4745e47184a61b0422d163088ae5e2983a57bf67dfc452463"
+  },
+  "generator_sha256": "371ea01a41f38594a4c42489ec9e3158f9411aec5bbd90bb99d0753daebb8d5a",
+  "critic_sha256": "75afbd8e164d8e5da6671cfad599db89517ac3be3b66507db3ad0d52bb25d7c4"
+}

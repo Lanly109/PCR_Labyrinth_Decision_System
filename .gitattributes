@@ -1,0 +1,2 @@
+# Model manifests hash exact bytes; preserve exported files on every platform.
+/models/** -text

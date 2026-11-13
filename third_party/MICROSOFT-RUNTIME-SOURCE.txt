@@ -1,0 +1,3 @@
+Microsoft VC++ desktop runtime, app-local DLL dependencies of the official ONNX Runtime.
+Source: https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx
+SHA256: b56a9101f706f9d95f815f5b7fa6efbac972e86573d378b96a07cff5540c5961
